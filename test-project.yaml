@@ -1,0 +1,92 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-project
+  labels:
+    app.kubernetes.io/name: test-project
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      appProtocol: http
+      name: http
+  selector:
+    app.kubernetes.io/name: test-project
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-project
+  labels:
+    app.kubernetes.io/name: test-project
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge:  0 
+      maxUnavailable:  1 
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: test-project
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+      labels:
+        app.kubernetes.io/name: test-project
+        version: v1
+    spec:
+      terminationGracePeriodSeconds: 20
+      automountServiceAccountToken: false
+      containers:
+        - name: test-project
+          image: nginx:stable
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: test-project
+  labels:
+    app.kubernetes.io/name: test-project
+spec:
+  host: test-project.default.svc.cluster.local
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+      trafficPolicy:
+        loadBalancer:
+          simple: LEAST_REQUEST
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: test-project
+  labels:
+    app.kubernetes.io/name: test-project
+spec:
+  hosts:
+    - test-project.default.svc.cluster.local
+    - my-url.example.com
+  gateways:
+    - mesh
+    - istio-system/gateway
+  http:
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: test-project.default.svc.cluster.local
+            subset: v1
+            port:
+              number: 80

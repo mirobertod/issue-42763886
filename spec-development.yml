@@ -1,0 +1,95 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  profile: default
+  values:
+    telemetry:
+      enabled: true
+      v2:
+        enabled: true
+        stackdriver:
+          enabled: true
+          inboundAccessLogging: ERRORS_ONLY  # This enables full Stackdriver server access logging, the other two options are `ERRORS_ONLY` and `NONE`
+          outboundAccessLogging: ERRORS_ONLY  # This enables Stackdriver full Stackdriver client access logging, the other two options are `ERRORS_ONLY` and `NONE`
+    global:
+      logAsJson: true
+      proxy:
+        autoInject: "disabled"
+        logLevel: debug
+    meshConfig:
+      accessLogFile: "/dev/stdout"
+      accessLogEncoding: JSON
+      defaultConfig:
+        holdApplicationUntilProxyStarts: true
+        terminationDrainDuration: 20s
+  components:
+    pilot:
+      k8s:
+        overlays:
+          - kind: PodDisruptionBudget
+            name: istiod
+            patches:
+              - path: spec.minAvailable
+              - path: spec.maxUnavailable
+                value: 1
+          - kind: Deployment
+            name: istiod
+            patches:
+              - path: spec.template.spec.topologySpreadConstraints
+                value:
+                  - maxSkew: 1
+                    topologyKey: topology.kubernetes.io/zone
+                    whenUnsatisfiable: DoNotSchedule
+                    labelSelector:
+                      matchLabels:
+                        istio: pilot
+        podAnnotations:
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+        hpaSpec:
+          minReplicas: 2
+          maxReplicas: 2
+    ingressGateways:
+      - name: istio-ingressgateway
+        k8s:
+          overlays:
+            - kind: PodDisruptionBudget
+              name: istio-ingressgateway
+              patches:
+                - path: spec.minAvailable
+                - path: spec.maxUnavailable
+                  value: 1
+            - kind: Deployment
+              name: istio-ingressgateway
+              patches:
+                - path: spec.strategy
+                  value:
+                    type: RollingUpdate
+                    rollingUpdate:
+                      maxSurge: 0
+                      maxUnavailable: 1
+                - path: spec.template.spec.topologySpreadConstraints
+                  value:
+                    - maxSkew: 1
+                      topologyKey: topology.kubernetes.io/zone
+                      whenUnsatisfiable: DoNotSchedule
+                      labelSelector:
+                        matchLabels:
+                          istio: ingressgateway
+          env:
+            - name: TERMINATION_DRAIN_DURATION_SECONDS
+              value: "20"
+          podAnnotations:
+            cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 2
+          service:
+            sessionAffinity: None
