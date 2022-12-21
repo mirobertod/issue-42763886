@@ -10,11 +10,11 @@ Steps to reproduce the issue:
 
 3. Connect to the newly created GKE cluster (i.e. `USE_GKE_GCLOUD_AUTH_PLUGIN=True gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project my-dev-project`)
 
-4. Install istio with the following command: `istioctl install --filename ./spec-development.yml`
+4. Install istio with the following command: `istioctl install --filename ./spec-development.yaml`
 
 5. Create a self-signed SSL certificate: `./create-cert.sh`
 
-6. Create a gateway resource: `kubectl apply --filename ./gateway.yml`
+6. Create a gateway resource: `kubectl apply --filename ./gateway.yaml`
 
 7. Create the nginx deployment: `kubectl apply --filename ./test-project.yaml`
 
